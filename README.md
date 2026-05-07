@@ -128,7 +128,7 @@ java hjUDPproxy /full/path/to/movie/cars.dat
 
 **Terminal 3 - Media Player:**
 ```bash
-celluloid 'udp://@:7777'
+celluloid 'udp://localhost:7777'
 # or: vlc 'udp://@:7777'
 # or: mpv 'udp://@:7777'
 ```
@@ -140,7 +140,6 @@ MediaStreamingMaterials/
 ├── README.md                          # This file
 ├── setup.sh                           # Configuration & certificate generation
 ├── run.sh                             # Multi-terminal auto-launcher
-├── manual-run.sh                      # Guide for manual runs
 │
 ├── hjStreamServer/
 │   ├── hjStreamServer.java            # Main server (300+ lines)
@@ -289,32 +288,3 @@ sudo tcpdump -i lo port 5000 or port 7777 -X
 ```
 
 This shows packet contents on localhost ports.
-
-## Performance Metrics
-
-Typical values when streaming 38 MB movie (cars.dat):
-- Frame rate: ~30 fps
-- Throughput: ~10-15 Mbps (encrypted + header)
-- Handshake time: ~50-100 ms
-- Total frames forwarded: 3000+
-- Packets forwarded: 3000+ (one packet per frame)
-
-## References
-
-- **ECDH**: RFC 3394 (Key Encryption with AES)
-- **ECDSA**: FIPS 186-4 (Digital Signature Standard)
-- **HKDF**: RFC 5869 (HMAC-based Extract-and-Expand Key Derivation Function)
-- **GCM**: NIST SP 800-38D (Recommendation for Block Cipher Modes of Operation)
-- **AES**: FIPS 197 (Specification for the Advanced Encryption Standard)
-
-## Notes
-
-- All components use JDK 11+ built-in cryptography (no external dependencies)
-- Certificates are self-signed (suitable for lab/testing only)
-- Localhost only (no remote streaming support in this version)
-- UDP is connectionless (no retransmission of lost packets)
-- Frame timing is maintained from the original `.dat` file
-
-## Author & License
-
-Created for Media Streaming course assignment - Real-Time Secure Streaming Protocol implementation.

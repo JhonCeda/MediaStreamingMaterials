@@ -77,11 +77,6 @@ N bytes (decrypted)
   - Higher security (combined encryption + authentication)
   - Slightly more overhead
 
-### Buffer Management
-- Server buffer: 16384 bytes
-- Proxy buffer: 16384 bytes
-- Accommodates: IV (16) + encrypted data + HMAC (32) + overhead
-
 ## How to Use
 
 ### 1. Initial Setup
@@ -272,7 +267,7 @@ After successful handshake:
 
 ## Testing
 
-### Quick End-to-End Test
+### Quick End-to-End Verification
 ```bash
 ./run.sh
 # Select: cars.dat
@@ -282,9 +277,47 @@ After successful handshake:
 #   - Celluloid opens and plays video
 ```
 
-### Monitor Network (requires sudo)
+### Performance Testing (test-performance.sh)
+
+The `test-performance.sh` script runs automated performance benchmarks on actual encrypted streaming:
+
+**What it does:**
+- Compiles both server and proxy
+- Runs 3 test configurations with different ciphers and key sizes
+- Measures real performance metrics: duration, frames transmitted, throughput (fps), and throughput (Kbps)
+- Generates results in `test_results/performance_results.txt`
+
+**Test configurations:**
+1. **RTSSP + AES/CTR/256**: Counter mode with 256-bit keys
+2. **RTSSP + AES/GCM/256**: Authenticated encryption with 256-bit keys
+3. **RTSSP + AES/GCM/128**: Authenticated encryption with 128-bit keys (same throughput, faster setup)
+
+**How to run:**
+```bash
+./test-performance.sh
+```
+
+**Results example:**
+```
+Test 1: RTSSP+AES/CTR/256
+Movie: cars.dat | Duration: 128s | Frames: 30515 | FPS: 238 | Kbps: 2509
+
+Test 2: RTSSP+AES/GCM/256
+Movie: monsters.dat | Duration: 142s | Frames: 25945 | FPS: 184 | Kbps: 1937
+
+Test 3: RTSSP+AES/GCM/128
+Movie: cars.dat | Duration: 129s | Frames: 30515 | FPS: 238 | Kbps: 2509
+```
+
+**Metrics explained:**
+- **Duration**: Total streaming time (seconds)
+- **Frames**: Number of video frames successfully encrypted and transmitted
+- **FPS**: Frames per second throughput (target: 30+ fps for real-time)
+- **Kbps**: Kilobits per second throughput
+
+### Monitor Network (optional, requires sudo)
 ```bash
 sudo tcpdump -i lo port 5000 or port 7777 -X
 ```
 
-This shows packet contents on localhost ports.
+This shows encrypted packet contents on localhost ports for debugging.

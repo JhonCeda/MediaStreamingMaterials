@@ -171,6 +171,10 @@ class hjStreamServer {
 			// Receive CLIENT_HELLO
 			byte[] clientHelloData = new byte[4096];
 			int bytesRead = in.read(clientHelloData);
+			if (bytesRead < 0) {
+				throw new Exception("[SHP] Connection closed before CLIENT_HELLO received!");
+			}
+			System.out.println("[SHP] Received CLIENT_HELLO (" + bytesRead + " bytes)");
 			SHPMessage.ClientHello clientHello = shpHandshake.processClientHello(
 					java.util.Arrays.copyOf(clientHelloData, bytesRead));
 

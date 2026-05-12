@@ -72,6 +72,7 @@ public class SHPClient {
 
   /**
    * Initiate handshake: send CLIENT_HELLO
+   * Encrypts movieName for handshake confidentiality
    */
   public void performHandshake(String serverHost, int serverPort, String movieName, String[] ciphersuites)
       throws Exception {
@@ -81,18 +82,34 @@ public class SHPClient {
     InputStream in = socket.getInputStream();
     OutputStream out = socket.getOutputStream();
 
+    // Load server's certificate to get public key for encryption
+    java.security.cert.Certificate serverCert = trustStore.getCertificate("server");
+    if (serverCert == null) {
+      throw new Exception("[SHP-Client] Server certificate not found in truststore!");
+    }
+    PublicKey serverPublicKey = serverCert.getPublicKey();
+    System.out.println("[SHP-Client] Loaded server public key for encryption");
+
     // Step 1: Send CLIENT_HELLO
     byte[] clientNonce = CryptoUtils.generateNonce(16);
     SHPMessage.ClientHello clientHello = new SHPMessage.ClientHello(
         movieName, getCertificateDER(), getECDHPublicKeyDER(), ciphersuites, clientNonce);
 
-    // Sign CLIENT_HELLO
+    // Encrypt movieName with server's public key
+    byte[] movieNameBytes = movieName.getBytes("UTF-8");
+    Cipher rsaCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+    rsaCipher.init(Cipher.ENCRYPT_MODE, serverPublicKey);
+    clientHello.encryptedMovieName = rsaCipher.doFinal(movieNameBytes);
+    System.out.println("[SHP-Client] Encrypted movieName (" + movieNameBytes.length + " → "
+        + clientHello.encryptedMovieName.length + " bytes)");
+
+    // Sign CLIENT_HELLO (signature now covers encrypted movieName)
     byte[] dataToSign = clientHello.getDataToSign();
     clientHello.signature = CryptoUtils.signData(dataToSign, proxyPrivateKey);
 
     out.write(clientHello.toBytes());
     out.flush();
-    System.out.println("[SHP-Client] CLIENT_HELLO sent ✓");
+    System.out.println("[SHP-Client] CLIENT_HELLO sent ✓ (movieName encrypted)");
 
     // Step 2: Receive SERVER_HELLO
     byte[] serverHelloData = new byte[4096];
@@ -104,13 +121,13 @@ public class SHPClient {
 
     // Verify server's certificate
     CertificateFactory cf = CertificateFactory.getInstance("X.509");
-    java.security.cert.Certificate serverCert = cf.generateCertificate(
+    java.security.cert.Certificate serverCert2 = cf.generateCertificate(
         new ByteArrayInputStream(serverHello.certificate));
 
     // Verify server's signature
-    PublicKey serverPublicKey = serverCert.getPublicKey();
+    PublicKey serverPublicKey2 = serverCert2.getPublicKey();
     byte[] serverDataToVerify = serverHello.getDataToSign();
-    if (!CryptoUtils.verifySignature(serverDataToVerify, serverHello.signature, serverPublicKey)) {
+    if (!CryptoUtils.verifySignature(serverDataToVerify, serverHello.signature, serverPublicKey2)) {
       throw new Exception("[SHP-Client] SERVER_HELLO signature verification failed!");
     }
     System.out.println("[SHP-Client] SERVER_HELLO signature verified ✓");

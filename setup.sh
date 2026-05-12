@@ -192,7 +192,7 @@ if [ "$MODE" = "RTSSP-SHP" ]; then
         cd "$SERVER_DIR"
         rm -f server.jks server.truststore server.cer
         keytool -genkeypair -alias server \
-            -keyalg EC -groupname secp256r1 \
+            -keyalg RSA -keysize 2048 \
             -keystore server.jks \
             -storepass serverpass -keypass serverpass \
             -validity 365 \
@@ -204,7 +204,7 @@ if [ "$MODE" = "RTSSP-SHP" ]; then
         cd "$PROXY_DIR"
         rm -f proxy.jks proxy.truststore proxy.cer
         keytool -genkeypair -alias proxy \
-            -keyalg EC -groupname secp256r1 \
+            -keyalg RSA -keysize 2048 \
             -keystore proxy.jks \
             -storepass proxypass -keypass proxypass \
             -validity 365 \

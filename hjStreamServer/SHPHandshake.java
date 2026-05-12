@@ -75,20 +75,25 @@ public class SHPHandshake {
 
   /**
    * Process CLIENT_HELLO from proxy
-   * Validates certificate and signature, extracts proxy's ECDH public key
+   * Decrypts movieName, validates certificate and signature
    */
   public SHPMessage.ClientHello processClientHello(byte[] rawMessage) throws Exception {
     SHPMessage.ClientHello msg = SHPMessage.ClientHello.fromBytes(rawMessage);
 
-    System.out.println("[SHP] Received CLIENT_HELLO for movie: " + msg.movieName);
+    // 1. Decrypt movieName using server's private key
+    Cipher rsaCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+    rsaCipher.init(Cipher.DECRYPT_MODE, serverPrivateKey);
+    byte[] decryptedMovieName = rsaCipher.doFinal(msg.encryptedMovieName);
+    msg.movieName = new String(decryptedMovieName, "UTF-8");
+    System.out.println("[SHP] Decrypted CLIENT_HELLO movieName: " + msg.movieName);
 
-    // 1. Verify proxy's certificate
+    // 2. Verify proxy's certificate
     CertificateFactory cf = CertificateFactory.getInstance("X.509");
     java.security.cert.Certificate proxyCert = cf.generateCertificate(
         new ByteArrayInputStream(msg.certificate));
     System.out.println("[SHP] Proxy certificate received: " + proxyCert);
 
-    // 2. Verify signature
+    // 3. Verify signature
     PublicKey proxyPublicKey = proxyCert.getPublicKey();
     byte[] dataToVerify = msg.getDataToSign();
     if (!CryptoUtils.verifySignature(dataToVerify, msg.signature, proxyPublicKey)) {

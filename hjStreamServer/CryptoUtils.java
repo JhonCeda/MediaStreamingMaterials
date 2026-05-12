@@ -98,7 +98,7 @@ public class CryptoUtils {
    * @return Signature bytes
    */
   public static byte[] signData(byte[] data, PrivateKey privateKey) throws Exception {
-    Signature sig = Signature.getInstance("SHA256withECDSA");
+    Signature sig = Signature.getInstance("SHA256withRSA");
     sig.initSign(privateKey);
     sig.update(data);
     return sig.sign();
@@ -113,7 +113,7 @@ public class CryptoUtils {
    * @return true if signature is valid
    */
   public static boolean verifySignature(byte[] data, byte[] signature, PublicKey publicKey) throws Exception {
-    Signature sig = Signature.getInstance("SHA256withECDSA");
+    Signature sig = Signature.getInstance("SHA256withRSA");
     sig.initVerify(publicKey);
     sig.update(data);
     return sig.verify(signature);

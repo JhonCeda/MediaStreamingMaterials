@@ -38,11 +38,12 @@ public class SHPMessage {
    */
   public static class ClientHello {
     public String movieName;
+    public byte[] encryptedMovieName; // RSA-encrypted movie name
     public byte[] certificate; // DER-encoded X509 certificate
     public byte[] ecdhPublicKey; // DER-encoded public key
     public String[] ciphersuites; // e.g., ["AES/CTR/NoPadding", "ChaCha20"]
     public byte[] nonce; // Random 16 bytes
-    public byte[] signature; // ECDSA signature of (movieName + cert + ecdhPubKey + ciphersuites + nonce)
+    public byte[] signature; // ECDSA signature of (cert + ecdhPubKey + ciphersuites + nonce)
 
     public ClientHello() {
     }
@@ -57,11 +58,11 @@ public class SHPMessage {
 
     /**
      * Get data to be signed (before adding signature)
+     * Signature covers encrypted movieName, not plaintext
      */
     public byte[] getDataToSign() throws Exception {
-      ByteBuffer bb = ByteBuffer.allocate(1024);
-      bb.putInt(movieName.length());
-      bb.put(movieName.getBytes("UTF-8"));
+      ByteBuffer bb = ByteBuffer.allocate(8192);
+      writeByteArray(bb, encryptedMovieName);
       writeByteArray(bb, certificate);
       writeByteArray(bb, ecdhPublicKey);
       bb.putInt(ciphersuites.length);
@@ -79,12 +80,12 @@ public class SHPMessage {
 
     /**
      * Serialize CLIENT_HELLO to bytes
+     * Transmits encryptedMovieName instead of plaintext
      */
     public byte[] toBytes() throws Exception {
-      ByteBuffer bb = ByteBuffer.allocate(4096);
+      ByteBuffer bb = ByteBuffer.allocate(16384);
       bb.put(CLIENT_HELLO);
-      bb.putInt(movieName.length());
-      bb.put(movieName.getBytes("UTF-8"));
+      writeByteArray(bb, encryptedMovieName);
       writeByteArray(bb, certificate);
       writeByteArray(bb, ecdhPublicKey);
       bb.putInt(ciphersuites.length);
@@ -103,6 +104,7 @@ public class SHPMessage {
 
     /**
      * Deserialize CLIENT_HELLO from bytes
+     * Reads encryptedMovieName (not plaintext)
      */
     public static ClientHello fromBytes(byte[] data) throws Exception {
       ByteBuffer bb = ByteBuffer.wrap(data);
@@ -110,10 +112,7 @@ public class SHPMessage {
         throw new Exception("Invalid message type");
 
       ClientHello msg = new ClientHello();
-      int movieLen = bb.getInt();
-      byte[] movieBytes = new byte[movieLen];
-      bb.get(movieBytes);
-      msg.movieName = new String(movieBytes, "UTF-8");
+      msg.encryptedMovieName = readByteArray(bb);
       msg.certificate = readByteArray(bb);
       msg.ecdhPublicKey = readByteArray(bb);
       int csLen = bb.getInt();

@@ -159,6 +159,10 @@ cipher.keysize=$KEYSIZE
 # IV size in bits (128 = 16 bytes for AES)
 cipher.ivsize=128
 
+# Shared secret for RTSSP mode static key derivation.
+# Both server and proxy read this from the server config.
+rtssp.shared.secret=RTSSP-default-shared-secret
+
 # === Part 2 (SHP) Settings ===
 # Server keystore path and credentials
 server.keystore.path=server.jks

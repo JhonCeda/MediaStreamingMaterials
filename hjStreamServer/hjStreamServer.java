@@ -4,7 +4,7 @@
 * for clients to play in real time the transmitted movies
 * 
 * Part 1: RTSSP - Real-Time Secure Streaming Protocol
-* - Generates random keys and IVs per session
+* - Uses static keys derived from shared configuration
 * - Encrypts frames with configurable cipher
 * - Adds HMAC for integrity
 * - Sends START and FINISH control messages
@@ -13,6 +13,7 @@
 import java.io.*;
 import java.net.*;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Properties;
 import javax.crypto.Cipher;
@@ -33,6 +34,7 @@ class hjStreamServer {
 		String hmacAlgorithm;
 		int keySize; // in bits
 		int ivSize; // in bits
+		String rtsspSharedSecret;
 
 		// Part 2 settings
 		String serverKeystorePath;
@@ -55,6 +57,7 @@ class hjStreamServer {
 		config.hmacAlgorithm = props.getProperty("hmac.algorithm", "HmacSHA256");
 		config.keySize = Integer.parseInt(props.getProperty("cipher.keysize", "256"));
 		config.ivSize = Integer.parseInt(props.getProperty("cipher.ivsize", "128"));
+		config.rtsspSharedSecret = props.getProperty("rtssp.shared.secret", "RTSSP-default-shared-secret");
 		// Load Part 2 (SHP) settings
 		config.serverKeystorePath = props.getProperty("server.keystore.path", "server.jks");
 		config.serverKeystorePassword = props.getProperty("server.keystore.password", "serverpass");
@@ -72,6 +75,17 @@ class hjStreamServer {
 		byte[] bytes = new byte[sizeBits / 8];
 		random.nextBytes(bytes);
 		return bytes;
+	}
+
+	static byte[] deriveRtsspKeyMaterial(CryptoConfig config) throws Exception {
+		int keyBytes = config.keySize / 8;
+		int ivBytes = config.ivSize / 8;
+		String info = "RTSSP-Static-Keys|" + config.cipherAlgorithm + "|" + config.keySize + "|" + config.ivSize;
+		return CryptoUtils.hkdf(
+				config.rtsspSharedSecret.getBytes(StandardCharsets.UTF_8),
+				null,
+				info.getBytes(StandardCharsets.UTF_8),
+				keyBytes + 32 + ivBytes);
 	}
 
 	static void sendControlMessage(DatagramSocket socket, InetSocketAddress addr, byte type, byte[] data)
@@ -93,6 +107,8 @@ class hjStreamServer {
 			String cipherAlgorithm, SecretKeySpec keySpec, byte[] baseIV,
 			int frameCounter) throws Exception {
 
+		byte[] packetIV = baseIV;
+
 		// For GCM, we need to reinitialize with a unique IV for each frame
 		if (cipherAlgorithm.contains("GCM")) {
 			// Generate unique IV by XORing frame counter into the base IV
@@ -106,14 +122,15 @@ class hjStreamServer {
 
 			GCMParameterSpec gcmSpec = new GCMParameterSpec(128, uniqueIV);
 			cipher.init(Cipher.ENCRYPT_MODE, keySpec, gcmSpec);
+			packetIV = uniqueIV;
 		}
 
 		byte[] encrypted = cipher.doFinal(data, offset, length);
 		byte[] hmac = mac.doFinal(encrypted);
 
 		// PREPEND IV to the packet so proxy can extract and use it for decryption
-		ByteBuffer buffer = ByteBuffer.allocate(baseIV.length + encrypted.length + hmac.length);
-		buffer.put(baseIV); // IV goes first
+		ByteBuffer buffer = ByteBuffer.allocate(packetIV.length + encrypted.length + hmac.length);
+		buffer.put(packetIV); // IV goes first
 		buffer.put(encrypted);
 		buffer.put(hmac);
 		return buffer.array();
@@ -144,14 +161,16 @@ class hjStreamServer {
 		SHPHandshake shpHandshake = null;
 
 		if (cryptoConfig.mode.equals("RTSSP")) {
-			// Part 1: Generate random keys
-			sessionKey = generateRandomBytes(cryptoConfig.keySize);
-			sessionIV = generateRandomBytes(cryptoConfig.ivSize);
-			hmacKey = generateRandomBytes(cryptoConfig.keySize);
+			// Part 1: derive static keys shared with the proxy from configuration
+			byte[] keyMaterial = deriveRtsspKeyMaterial(cryptoConfig);
+			int keyBytes = cryptoConfig.keySize / 8;
+			int ivBytes = cryptoConfig.ivSize / 8;
+			sessionKey = java.util.Arrays.copyOfRange(keyMaterial, 0, keyBytes);
+			hmacKey = java.util.Arrays.copyOfRange(keyMaterial, keyBytes, keyBytes + 32);
+			sessionIV = java.util.Arrays.copyOfRange(keyMaterial, keyBytes + 32, keyBytes + 32 + ivBytes);
 
-			System.out.println("[RTSSP] Generated random key (" + cryptoConfig.keySize + " bits)");
-			System.out.println("[RTSSP] Generated random IV (" + cryptoConfig.ivSize + " bits)");
-			System.out.println("[RTSSP] Running Part 1: RTSSP (Static session keys)");
+			System.out.println("[RTSSP] Derived static key material from shared configuration");
+			System.out.println("[RTSSP] Running Part 1: RTSSP (Static config keys)");
 		} else {
 			// Part 2: SHP Handshake
 			System.out.println("[SHP] Initializing handshake...");
